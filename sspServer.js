@@ -51,21 +51,24 @@ app.post("/bidRequest/:people", async (req, res) => {
     .exec(async () => {
       const urlList = [];
       for (let i = 0; i < people; i++) {
-        urlList.push(`http://localhost:3001/processBid/${i}`);
+        urlList.push(`http://localhost:3002/processBid/${i}`);
       }
 
       try {
         //  Send bid Request Simultaneously
         await Promise.all(urlList.map((url) => getBidResponse(url, {})));
 
-        const sortedData = await redisClient
+        const ranking = await redisClient
           .zrevrange("bidResponses", 0, -1)
           .then((result) => {
             return result.map((data) => JSON.parse(data));
           });
 
-        console.log(sortedData);
-        res.json(sortedData);
+        console.log(ranking);
+        await axios.post("http://localhost:3001/send-to-kafka/", {
+          ranking,
+        });
+        res.json(ranking);
       } catch (error) {
         console.error("Error in handling bid request:", error.message);
         res.status(500).json({ error: "Internal Server Error" });
