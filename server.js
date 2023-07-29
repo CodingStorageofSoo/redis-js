@@ -42,17 +42,17 @@ async function getBidResponse(url, data) {
   }
 }
 
-app.post("/bidRequest", async (req, res) => {
+app.post("/bidRequest/:people", async (req, res) => {
+  const people = req.params.people;
   redisClient
     .multi()
     .del("bidResponses")
     .set("cnt", 0)
     .exec(async () => {
-      const urlList = [
-        "http://localhost:3001/processBid",
-        "http://localhost:3002/processBid",
-        "http://localhost:3003/processBid",
-      ];
+      const urlList = [];
+      for (let i = 0; i < people; i++) {
+        urlList.push(`http://localhost:3001/processBid/${i}`);
+      }
 
       try {
         //  Send bid Request Simultaneously
