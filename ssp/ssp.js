@@ -9,7 +9,7 @@ const axios = require("axios");
 
 const Redis = require("ioredis");
 const redisClient = new Redis({
-  // host: "redis-server",
+  host: "redis-server",
   port: REDIS_PORT,
 });
 
@@ -46,28 +46,32 @@ app.post("/bidRequest/:people", async (req, res) => {
   const people = req.params.people;
   const urlList = [];
   for (let i = 0; i < people; i++) {
-    urlList.push(`http://localhost:${DSP_PORT}/processBid/${i}`);
+    urlList.push(`http://dsp-server:${DSP_PORT}/processBid/${i}`);
   }
-  try {
-    //  Send bid Request Simultaneously
-    await Promise.all(urlList.map((url) => getBidResponse(url, {})));
+  redisClient
+    .multi()
+    .del("bidResponses")
+    .set("cnt", 0)
+    .exec(async () => {
+      try {
+        //  Send bid Request Simultaneously
+        await Promise.all(urlList.map((url) => getBidResponse(url, {})));
 
-    const ranking = await redisClient
-      .zrevrange("bidResponses", 0, -1)
-      .then((result) => {
-        return result.map((data) => JSON.parse(data));
-      });
+        const ranking = await redisClient
+          .zrevrange("bidResponses", 0, -1)
+          .then((result) => {
+            return result.map((data) => JSON.parse(data));
+          });
 
-    console.log(ranking);
-    res.json(ranking);
-  } catch (error) {
-    console.error("Error in handling bid request:", error.message);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
+        console.log(ranking);
+        res.json(ranking);
+      } catch (error) {
+        console.error("Error in handling bid request:", error.message);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
 });
 
 app.listen(SSP_PORT, async () => {
   console.log(`SSP Server Listening on PORT ${SSP_PORT}`);
-  await redisClient.flushdb();
-  console.log("Redis Server turns on");
 });

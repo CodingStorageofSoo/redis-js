@@ -1,4 +1,5 @@
 require("dotenv").config();
+const { DSP_PORT } = process.env;
 
 const express = require("express");
 const app = express();
@@ -18,7 +19,6 @@ app.get("/processBid/:id", (req, res) => {
   }, randomNumberInRange(0, 2000));
 });
 
-const PORT = process.env.DSP_PORT;
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+app.listen(DSP_PORT, () => {
+  console.log(`DSP Server listening on port ${DSP_PORT}`);
 });
