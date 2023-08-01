@@ -1,17 +1,17 @@
-// npm init -y
-// npm i express
+require("dotenv").config();
+const { SSP_PORT, DSP_PORT, REDIS_PORT } = process.env;
+
 const express = require("express");
 const app = express();
 app.use(express.json());
 
-// npm i axios
 const axios = require("axios");
 
-// npm i ioredis
-// redis-server
-// redis-cli
 const Redis = require("ioredis");
-const redisClient = new Redis();
+const redisClient = new Redis({
+  // host: "redis-server",
+  port: REDIS_PORT,
+});
 
 async function getBidResponse(url, data) {
   try {
@@ -44,39 +44,30 @@ async function getBidResponse(url, data) {
 
 app.post("/bidRequest/:people", async (req, res) => {
   const people = req.params.people;
-  redisClient
-    .multi()
-    .del("bidResponses")
-    .set("cnt", 0)
-    .exec(async () => {
-      const urlList = [];
-      for (let i = 0; i < people; i++) {
-        urlList.push(`http://localhost:3002/processBid/${i}`);
-      }
+  const urlList = [];
+  for (let i = 0; i < people; i++) {
+    urlList.push(`http://localhost:${DSP_PORT}/processBid/${i}`);
+  }
+  try {
+    //  Send bid Request Simultaneously
+    await Promise.all(urlList.map((url) => getBidResponse(url, {})));
 
-      try {
-        //  Send bid Request Simultaneously
-        await Promise.all(urlList.map((url) => getBidResponse(url, {})));
+    const ranking = await redisClient
+      .zrevrange("bidResponses", 0, -1)
+      .then((result) => {
+        return result.map((data) => JSON.parse(data));
+      });
 
-        const ranking = await redisClient
-          .zrevrange("bidResponses", 0, -1)
-          .then((result) => {
-            return result.map((data) => JSON.parse(data));
-          });
-
-        console.log(ranking);
-        await axios.post("http://localhost:3001/send-to-kafka/", {
-          ranking,
-        });
-        res.json(ranking);
-      } catch (error) {
-        console.error("Error in handling bid request:", error.message);
-        res.status(500).json({ error: "Internal Server Error" });
-      }
-    });
+    console.log(ranking);
+    res.json(ranking);
+  } catch (error) {
+    console.error("Error in handling bid request:", error.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 });
 
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`SSP Server Listening on PORT ${PORT}`);
+app.listen(SSP_PORT, async () => {
+  console.log(`SSP Server Listening on PORT ${SSP_PORT}`);
+  await redisClient.flushdb();
+  console.log("Redis Server turns on");
 });
